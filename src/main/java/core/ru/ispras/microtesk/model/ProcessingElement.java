@@ -16,6 +16,7 @@ package ru.ispras.microtesk.model;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,6 +183,14 @@ public abstract class ProcessingElement {
     }
 
     return getMemoryDevice(memoryAllocatorStorageId);
+  }
+
+  public final Map<String, Memory> getStorages() {
+    return Collections.unmodifiableMap(storageMap);
+  }
+
+  public final Map<String, Label> getLabels() {
+    return Collections.unmodifiableMap(labelMap);
   }
 
   private Memory getStorage(final String storageId) throws ConfigurationException {
