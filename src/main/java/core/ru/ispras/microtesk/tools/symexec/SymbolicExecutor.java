@@ -25,11 +25,14 @@ import ru.ispras.fortress.solver.engine.smt.SmtTextBuilder;
 
 import ru.ispras.fortress.util.InvariantChecks;
 import ru.ispras.microtesk.Logger;
+import ru.ispras.microtesk.SysUtils;
 import ru.ispras.microtesk.tools.Disassembler;
 import ru.ispras.microtesk.tools.Disassembler.Output;
 import ru.ispras.microtesk.model.IsaPrimitive;
 import ru.ispras.microtesk.model.Model;
+import ru.ispras.microtesk.model.ProcessingElement;
 import ru.ispras.microtesk.model.TemporaryVariables;
+import ru.ispras.microtesk.model.memory.Memory;
 import ru.ispras.microtesk.options.Options;
 
 public final class SymbolicExecutor {
@@ -59,6 +62,7 @@ public final class SymbolicExecutor {
 
     final String smtFileName = fileName + ".smt2";
     writeSmt(smtFileName, ssa);
+    createMapping(modelName, instructions);
 
     Logger.message("Created file: %s", smtFileName);
     return true;
@@ -78,6 +82,36 @@ public final class SymbolicExecutor {
           );
     } catch (final java.io.IOException e) {
       Logger.error(e.getMessage());
+    }
+  }
+
+  private static void createMapping(final String modelName, final List<IsaPrimitive> code) {
+    final Model model = loadModel(modelName);
+    if (model == null) {
+      return;
+    }
+    final ProcessingElement pe = model.getPeFactory().create();
+    final List<String> entries = new ArrayList<>();
+    for (final Memory unit : pe.getStorages().values()) {
+      if (unit.getKind() == Memory.Kind.REG || unit.getKind() == Memory.Kind.MEM) {
+        final String type = unit.getKind().toString().toLowerCase();
+        final int card = unit.getLength().intValue();
+        final int size = unit.getType().getBitSize();
+
+        final String entry = String.format("%s,%s,%s,%d,%s,%s",
+          unit.getName(), type, (card > 1) ? card : "", size, "NYI", "NYI");
+
+        entries.add(entry);
+      }
+    }
+  }
+
+  private static Model loadModel(final String modelName) {
+    try {
+      return SysUtils.loadModel(modelName);
+    } catch (final Exception e) {
+      Logger.error("Failed to load the %s model. Reason: %s.", modelName, e.getMessage());
+      return null;
     }
   }
 
