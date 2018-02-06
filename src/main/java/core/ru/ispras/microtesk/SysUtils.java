@@ -19,6 +19,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
 import ru.ispras.fortress.util.InvariantChecks;
 import ru.ispras.microtesk.model.Model;
@@ -33,6 +35,8 @@ import ru.ispras.microtesk.translator.generation.PackageInfo;
 public final class SysUtils {
   /** Name of the environment variable that stores the path to MicroTESK home folder. */
   public static final String MICROTESK_HOME = "MICROTESK_HOME";
+
+  private static final Map<String, ModelBuilder> LOADED_MODELS = new HashMap<>();
 
   private SysUtils() {}
 
@@ -67,11 +71,17 @@ public final class SysUtils {
   public static Model loadModel(final String modelName) {
     InvariantChecks.checkNotNull(modelName);
 
-    final String modelClassName = String.format(
+    final ModelBuilder modelBuilder;
+    if (LOADED_MODELS.containsKey(modelName)) {
+      modelBuilder = LOADED_MODELS.get(modelName);
+    } else {
+      final String modelClassName = String.format(
         "%s.%s.Model", PackageInfo.MODEL_PACKAGE, modelName);
 
-    final ModelBuilder modelBuilder =
-        (ModelBuilder) loadFromModel(modelClassName);
+      modelBuilder = (ModelBuilder) loadFromModel(modelClassName);
+
+      LOADED_MODELS.put(modelName, modelBuilder);
+    }
 
     return null != modelBuilder ? modelBuilder.build() : null;
   }
