@@ -213,6 +213,10 @@ public final class Model implements ModelStateManager {
     return getPE().getMemoryAllocator();
   }
 
+  public ProcessingElement.Factory getPeFactory() {
+    return this.procElemFactory;
+  }
+
   public IsaPrimitiveBuilder newMode(
       final String name) throws ConfigurationException {
     InvariantChecks.checkNotNull(name);
