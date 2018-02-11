@@ -21,6 +21,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -112,6 +113,7 @@ public final class SsaAssembler {
   private Deque<Integer> batchSize;
 
   private Deque<Changes> changesStack;
+  private Map<String, NodeVariable> changesStore;
   private Changes changes;
 
   private NamePath actualPrefix;
@@ -122,7 +124,7 @@ public final class SsaAssembler {
     this.scope = new SsaScopeVariable();
     this.numTemps = 0;
 
-    final Map<String, NodeVariable> changesStore = new HashMap<>();
+    this.changesStore = new HashMap<>();
     this.changes = new Changes(changesStore, changesStore);
   }
 
@@ -145,6 +147,10 @@ public final class SsaAssembler {
     step(NamePath.get(entry), "action");
 
     return endBatch();
+  }
+
+  public Map<String, NodeVariable> getVersions() {
+    return Collections.unmodifiableMap(this.changesStore);
   }
 
   private static Map<NamePath, String> parseQuery(final Map<String, Object> query) {
