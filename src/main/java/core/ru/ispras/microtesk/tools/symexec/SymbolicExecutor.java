@@ -17,9 +17,12 @@ package ru.ispras.microtesk.tools.symexec;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import ru.ispras.fortress.expression.Node;
+import ru.ispras.fortress.expression.NodeVariable;
 import ru.ispras.fortress.solver.engine.smt.Cvc4Solver;
 import ru.ispras.fortress.solver.engine.smt.SmtTextBuilder;
 
@@ -58,11 +61,13 @@ public final class SymbolicExecutor {
     final List<IsaPrimitive> instructions = output.getInstructions();
     InvariantChecks.checkNotNull(instructions);
 
-    final List<Node> ssa = FormulaBuilder.buildFormulas(modelName, instructions);
+    final FormulaBuilder.Result result =
+      FormulaBuilder.buildFormulas(modelName, instructions);
+    final List<Node> ssa = result.ssa;
 
     final String smtFileName = fileName + ".smt2";
     writeSmt(smtFileName, ssa);
-    createMapping(modelName, instructions);
+    createMapping(modelName, instructions, result.vars, result.versions);
 
     Logger.message("Created file: %s", smtFileName);
     return true;
@@ -85,11 +90,59 @@ public final class SymbolicExecutor {
     }
   }
 
-  private static void createMapping(final String modelName, final List<IsaPrimitive> code) {
+  private static int getVersion(final Node node) {
+    return (Integer) node.getUserData();
+  }
+
+  private static void createMapping(
+    final String modelName,
+    final List<IsaPrimitive> code,
+    final Map<String, IsaPrimitive> vars,
+    final Map<String, NodeVariable> versions) {
     final Model model = loadModel(modelName);
     if (model == null) {
       return;
     }
+    /*
+    for (final IsaPrimitive instr : code) {
+      System.out.println(instr.text(model.getTempVars()));
+    }
+    System.out.println();
+    for (final Map.Entry<String, IsaPrimitive> entry : vars.entrySet()) {
+      System.out.printf("%s: %s%n", entry.getValue().text(model.getTempVars()), entry.getKey());
+    }
+    System.out.println();
+    */
+
+    final Map<String, NodeVariable> initial = new HashMap<>();
+    final Map<String, NodeVariable> results = new HashMap<>();
+    for (final Map.Entry<String, IsaPrimitive> entry : vars.entrySet()) {
+      // System.out.printf("%s: %s%n", entry.getValue().text(model.getTempVars()), entry.getKey());
+      final String asmName = entry.getValue().text(model.getTempVars());
+      final String varName = entry.getKey();
+
+      if (asmName.matches("^\\w+$") && versions.containsKey(varName)) {
+        final NodeVariable init = initial.get(asmName);
+        final NodeVariable var = versions.get(varName);
+        if (init == null) {
+          initial.put(asmName, var);
+          results.put(asmName, var);
+        } else if (getVersion(var) > 1) {
+          results.put(asmName, var);
+        }
+      }
+    }
+
+    /*
+    for (final Map.Entry<String, NodeVariable> entry : initial.entrySet()) {
+      final NodeVariable result = results.get(entry.getKey());
+      System.out.printf("%s,%s!%d,%s!%d%n",
+        entry.getKey(),
+        entry.getValue().getName(), getVersion(entry.getValue()),
+        result.getName(), getVersion(result));
+    }
+    */
+
     final ProcessingElement pe = model.getPeFactory().create();
     final List<String> entries = new ArrayList<>();
     for (final Memory unit : pe.getStorages().values()) {
