@@ -317,21 +317,21 @@ public final class SsaAssembler {
       final Pair<String, String> pair =
           StringUtils.splitOnLast(literalOperand(0, node), '.');
 
-      return linkMacro(path, pair.second, suffix, version);
+      return linkMacro(path.resolve(pair.second), suffix, version);
     }
   }
 
-  private NodeVariable linkMacro(final NamePath path, final String name, final String method, final int version) {
-    stepArgument(path, name, method);
+  private NodeVariable linkMacro(final NamePath path, final String method, final int version) {
+    step(path, method);
 
     final NodeVariable tmp =
         scope.fetch(String.format("__tmp_%d", numTemps - 1));
 
     final NodeVariable var =
-      changes.rebase(getVariableName(path, name), tmp.getData(), version);
+      changes.rebase(getVariableName(path), tmp.getData(), version);
     addToBatch(Nodes.eq(var, tmp));
 
-    return tmp;
+    return var;
   }
 
   private String getVariableName(final NamePath path, final String... tail) {
