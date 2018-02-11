@@ -83,6 +83,10 @@ final class Changes {
     return store.get(name);
   }
 
+  public boolean isLatest(final NodeVariable sample) {
+    return getVersion(sample) == getVersion(getLatest(sample.getName()));
+  }
+
   public NodeVariable newLatest(final String name) {
     final NodeVariable prev = getLatest(name);
     final NodeVariable latest = new NodeVariable(prev.getVariable());
