@@ -76,6 +76,8 @@ final class Parameters {
 
 final class Closure {
   private final NodeOperation node;
+  private final Map<NamePath, NamePath> inoutLink = new HashMap<>();
+  private final Map<NamePath, NodeVariable> localVars = new HashMap<>();
 
   public Closure(final Node node) {
     InvariantChecks.checkTrue(ExprUtils.isOperation(node, SsaOperation.CLOSURE));
@@ -96,6 +98,22 @@ final class Closure {
 
   public Node getArgument(final int i) {
     return node.getOperand(i + 1);
+  }
+
+  public void linkArgument(
+    final NamePath input,
+    final NamePath local,
+    final NodeVariable localVar) {
+    inoutLink.put(local, input);
+    localVars.put(local, localVar);
+  }
+
+  public Map<NamePath, NodeVariable> getLocals() {
+    return Collections.unmodifiableMap(localVars);
+  }
+
+  public Map<NamePath, NamePath> getLinked() {
+    return Collections.unmodifiableMap(inoutLink);
   }
 }
 
@@ -320,7 +338,7 @@ public final class SsaAssembler {
     return NamePath.get(this.actualPrefix.resolve(path.subpath(1)), tail).toString();
   }
 
-  private void linkClosure(final NamePath callerPath,
+  private Closure linkClosure(final NamePath callerPath,
                            final NamePath calleePath,
                            final Closure closure) {
     final Parameters parameters = getParameters(closure.getOriginName());
@@ -353,7 +371,8 @@ public final class SsaAssembler {
         extension.put(paramPath, context.get(srcPath));
         context.putAll(extension);
 
-        linkArgument(paramPath, srcPath);
+        final NodeVariable local = linkArgument(paramPath, srcPath);
+        closure.linkArgument(srcPath, paramPath, local);
       } else {
         final NodeVariable arg =
             changes.rebase(
@@ -365,9 +384,10 @@ public final class SsaAssembler {
 //        walkStatements(origin, Collections.singleton(EQ(arg, operand)));
       }
     }
+    return closure;
   }
 
-  private void linkArgument(final NamePath dstPath, final NamePath srcPath) {
+  private NodeVariable linkArgument(final NamePath dstPath, final NamePath srcPath) {
     final String argType =
       context.get(srcPath.subpath(0, srcPath.getNameCount() - 1));
     final String localName =
@@ -382,6 +402,8 @@ public final class SsaAssembler {
       changes.rebase(getVariableName(srcPath), data, 1);
 
     addToBatch(Nodes.eq(target, source));
+
+    return target;
   }
 
   private Parameters getParameters(final String callee) {
@@ -427,8 +449,20 @@ public final class SsaAssembler {
           final NamePath innerPath =
             path.resolve(String.format("%s_%d", callee, num));
 
-          linkClosure(path, innerPath, new Closure(instance));
+          final Closure closure =
+            linkClosure(path, innerPath, new Closure(instance));
           step(innerPath, literalOperand(1, call));
+          changes.commit();
+
+          for (final Map.Entry<NamePath, NamePath> entry : closure.getLinked().entrySet()) {
+            final NodeVariable stored = closure.getLocals().get(entry.getKey());
+            if (!changes.isLatest(stored)) {
+              final NodeVariable latest = changes.getLatest(stored.getName());
+              final NodeVariable inout = linkMacro(entry.getValue(), "expand", 2);
+
+              addToBatch(Nodes.eq(inout, latest));
+            }
+          }
         }
         // Prune custom SSA operation
         return Nodes.TRUE;
