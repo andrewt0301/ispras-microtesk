@@ -106,6 +106,22 @@ final class Changes {
   }
 
   private NodeVariable rebase(final Variable var, final int relative) {
+    final NodeVariable latest = getLatest(var.getName());
+    final NodeVariable node = rebase(var, relative, 0);
+    if (latest != null) {
+    System.out.printf("[REBASE] %s!%d -> %s!%d (vs. %s!%d)%n",
+      var.getName(), relative,
+      node.getName(), getVersion(node),
+      latest.getName(), getVersion(latest));
+    } else {
+    System.out.printf("[REBASE] %s!%d -> %s!%d (new)%n",
+      var.getName(), relative,
+      node.getName(), getVersion(node));
+    }
+    return node;
+  }
+
+  private NodeVariable rebase(final Variable var, final int relative, int unused) {
     final Batch batch = getBatch(var);
     if (relative == 1) {
       return batch.load;
