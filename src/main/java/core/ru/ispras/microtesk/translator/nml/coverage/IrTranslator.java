@@ -66,7 +66,6 @@ final class IrTranslator {
 
   private final IrInquirer inquirer;
   private final String prefix;
-  private final String suffix;
   private final String extendedPrefix;
   private final List<Statement> code;
 
@@ -496,7 +495,7 @@ final class IrTranslator {
 
   private SsaForm convertNested(final List<Statement> statements) {
     final IrTranslator builder =
-        new IrTranslator(inquirer, prefix, suffix, extendedPrefix, statements);
+        new IrTranslator(inquirer, prefix, extendedPrefix, statements);
     builder.numBlocks = this.numBlocks;
     final SsaForm ssa = builder.build();
     this.numBlocks = builder.numBlocks;
@@ -838,21 +837,21 @@ final class IrTranslator {
     return null;
   }
 
-  public IrTranslator(
-      final IrInquirer inquirer,
-      final String prefix,
-      final String attribute,
-      final List<Statement> code) {
-    this(inquirer, prefix, attribute, StringUtils.dotConc(prefix, attribute), code);
-
+  public static IrTranslator create(
+    final IrInquirer inquirer,
+    final String prefix,
+    final String attribute,
+    final List<Statement> code) {
     InvariantChecks.checkNotNull(prefix);
     InvariantChecks.checkNotNull(attribute);
     InvariantChecks.checkFalse(attribute.isEmpty());
     InvariantChecks.checkNotNull(code);
+
+    return new IrTranslator(inquirer, prefix, StringUtils.dotConc(prefix, attribute), code);
   }
 
   public IrTranslator(final IrInquirer inquirer, final String prefix) {
-    this(inquirer, prefix, "", prefix, Collections.<Statement>emptyList());
+    this(inquirer, prefix, prefix, Collections.<Statement>emptyList());
 
     InvariantChecks.checkNotNull(inquirer);
     InvariantChecks.checkNotNull(prefix);
@@ -860,12 +859,10 @@ final class IrTranslator {
 
   private IrTranslator(final IrInquirer inquirer,
                      final String prefix,
-                     final String suffix,
                      final String extended,
                      final List<Statement> code) {
     this.inquirer = inquirer;
     this.prefix = prefix;
-    this.suffix = suffix;
     this.extendedPrefix = extended;
     this.code = code;
     this.scope = null;
