@@ -25,5 +25,7 @@ public enum SsaOperation {
   UPDATE,
   SUBSTITUTE,
   BLOCK,
-  MARK
+  MARK,
+  LVALUE,
+  ASSIGN
 }
