@@ -68,14 +68,11 @@ final class IrTranslator {
   private final String prefix;
   private final String extendedPrefix;
   private final List<Statement> code;
+  private final List<NodeOperation> output = new ArrayList<>();
 
-  private SsaScope scope;
-
-  private int numBlocks;
-  private int numTemps;
-  private Block.Builder blockBuilder;
-  private Deque<Block> stack;
-  private List<Block> blocks;
+  private final SsaScope scope = new SsaScopeVariable();
+  private int numTemps = 0;
+  private int numBlocks = 0;
 
   private static final class LValue {
     public final Variable base;
@@ -136,7 +133,7 @@ final class IrTranslator {
   }
 
   public void addToContext(NodeOperation node) {
-    blockBuilder.add(node);
+    output.add(node);
   }
 
   private NodeVariable createTemporary(DataType type) {
@@ -296,7 +293,6 @@ final class IrTranslator {
   }
 
   private void assign(final Node lhs, final Node value) {
-    acquireBlockBuilder();
     final Node rhs = convertExpression(value);
 
     // Hack to deal with internal variables described by string constants.
@@ -460,47 +456,29 @@ final class IrTranslator {
   }
 
   private void convertCondition(StatementCondition s) {
-    acquireBlockBuilder();
     final BranchPoint branchPoint = collectConditions(s);
-    finalizeBlock();
-
-    final Block phi = Block.newPhi();
-    final String phiName = generateBlockName();
-    final List<GuardedBlock> mergePoint =
-        Collections.singletonList(new GuardedBlock(phiName, Nodes.TRUE, phi));
-    final List<GuardedBlock> children = new ArrayList<>(s.getBlockCount());
-
     for (int i = 0; i < s.getBlockCount(); ++i) {
       final StatementCondition.Block codeBlock = s.getBlock(i);
-      final SsaForm ssa = convertNested(codeBlock.getStatements());
+      final List<NodeOperation> nested =
+        convertNested(codeBlock.getStatements());
+      /* TODO
       children.add(new GuardedBlock(branchPoint.names.get(i),
                                     branchPoint.guards.get(i),
                                     ssa.getEntryPoint()));
-      for (Block block : ssa.getExitPoints()) {
-        block.setChildren(mergePoint);
-      }
-      blocks.addAll(ssa.getBlocks());
+      //*/
     }
+    /* TODO
     if (!s.getBlock(s.getBlockCount() - 1).isElseBlock()) {
       children.add(new GuardedBlock(
           phiName, Nodes.not(Nodes.or(branchPoint.negateGuards())), phi));
     }
-    final Block block = stack.pop();
-    block.setChildren(children);
-    block.setSuccessor(phi);
-
-    stack.push(phi);
-    blocks.add(phi);
+    //*/
   }
 
-  private SsaForm convertNested(final List<Statement> statements) {
+  private List<NodeOperation> convertNested(final List<Statement> statements) {
     final IrTranslator builder =
         new IrTranslator(inquirer, prefix, extendedPrefix, statements);
-    builder.numBlocks = this.numBlocks;
-    final SsaForm ssa = builder.build();
-    this.numBlocks = builder.numBlocks;
-
-    return ssa;
+    return builder.run();
   }
 
   private String generateBlockName() {
@@ -588,7 +566,6 @@ final class IrTranslator {
   private void convertCall(StatementAttributeCall s) {
     final NodeOperation node;
     if (s.isInstanceCall()) {
-      acquireBlockBuilder();
       node = new NodeOperation(SsaOperation.CALL,
                                instanceReference(s.getCalleeInstance()),
                                newNamed(s.getAttributeName()));
@@ -599,8 +576,6 @@ final class IrTranslator {
                                newNamed(s.getCalleeName()),
                                newNamed(s.getAttributeName()));
     }
-    finalizeBlock();
-    pushConsecutiveBlock(Block.newSingleton(node));
   }
 
   private Node instanceReference(final Instance instance) {
@@ -642,30 +617,6 @@ final class IrTranslator {
 
   private static NodeVariable newNamed(final String name) {
     return new NodeVariable(name, DataType.BOOLEAN);
-  }
-
-  public void acquireBlockBuilder() {
-    if (blockBuilder == null) {
-      blockBuilder = new Block.Builder();
-      scope = new SsaScopeVariable();
-      numTemps = 0;
-    }
-  }
-
-  private void finalizeBlock() {
-    if (blockBuilder != null) {
-      pushConsecutiveBlock(blockBuilder.build());
-      blockBuilder = null;
-    }
-  }
-
-  private void pushConsecutiveBlock(Block block) {
-    if (!stack.isEmpty()) {
-      stack.pop().setChildren(
-          Collections.singletonList(new GuardedBlock(generateBlockName(), Nodes.TRUE, block)));
-    }
-    stack.push(block);
-    blocks.add(block);
   }
 
   private void convertCode(List<Statement> code) {
@@ -865,33 +816,20 @@ final class IrTranslator {
     this.prefix = prefix;
     this.extendedPrefix = extended;
     this.code = code;
-    this.scope = null;
-    this.numBlocks = 0;
-    this.numTemps = 0;
-    this.blockBuilder = null;
-    this.stack = new ArrayDeque<>();
-    this.blocks = new ArrayList<>();
+  }
+
+  private List<NodeOperation> run() {
+    // TODO
+    // convertCode(code);
+    return Collections.emptyList();
   }
 
   public SsaForm build() {
-    // probably never built
-    if (blocks.isEmpty()) {
-      convertCode(code);
-      finalizeBlock();
-    }
-
-    // still empty?
-    if (blocks.isEmpty()) {
-      return SsaForm.newEmpty();
-    }
-
-    return SsaForm.newForm(blocks);
+    return SsaForm.newEmpty();
   }
 
   public static SsaForm macroExpansion(final IrInquirer inquirer, final String prefix, final Node node) {
     final IrTranslator builder = new IrTranslator(inquirer, prefix);
-    builder.acquireBlockBuilder();
-
     builder.addToContext(
       Nodes.eq(builder.convertExpression(node), builder.createOutput(node)));
 
@@ -900,13 +838,10 @@ final class IrTranslator {
 
   public static SsaForm macroUpdate(final IrInquirer inquirer, final String prefix, final Node node) {
     final IrTranslator builder = new IrTranslator(inquirer, prefix);
-    builder.acquireBlockBuilder();
-
     final Location loc = locationFromNodeVariable(node);
     if (loc != null) {
       builder.assign(node, builder.createOutput(node));
     }
-
     return builder.build();
   }
 
