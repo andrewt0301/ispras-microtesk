@@ -132,8 +132,8 @@ final class IrTranslator {
     }
   }
 
-  public void addToContext(NodeOperation node) {
-    output.add(node);
+  public void addToContext(final NodeOperation node) {
+    this.translations.peek().add(node);
   }
 
   private NodeVariable createTemporary(DataType type) {
