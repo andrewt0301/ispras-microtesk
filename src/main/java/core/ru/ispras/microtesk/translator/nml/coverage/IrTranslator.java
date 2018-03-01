@@ -68,7 +68,7 @@ final class IrTranslator {
   private final String prefix;
   private final String extendedPrefix;
   private final List<Statement> code;
-  private final List<NodeOperation> output = new ArrayList<>();
+  private final Deque<List<NodeOperation>> translations = new ArrayDeque<>();
 
   private final SsaScope scope = new SsaScopeVariable();
   private int numTemps = 0;
@@ -459,8 +459,7 @@ final class IrTranslator {
     final BranchPoint branchPoint = collectConditions(s);
     for (int i = 0; i < s.getBlockCount(); ++i) {
       final StatementCondition.Block codeBlock = s.getBlock(i);
-      final List<NodeOperation> nested =
-        convertNested(codeBlock.getStatements());
+      final List<NodeOperation> nested = translate(codeBlock.getStatements());
       /* TODO
       children.add(new GuardedBlock(branchPoint.names.get(i),
                                     branchPoint.guards.get(i),
@@ -473,12 +472,6 @@ final class IrTranslator {
           phiName, Nodes.not(Nodes.or(branchPoint.negateGuards())), phi));
     }
     //*/
-  }
-
-  private List<NodeOperation> convertNested(final List<Statement> statements) {
-    final IrTranslator builder =
-        new IrTranslator(inquirer, prefix, extendedPrefix, statements);
-    return builder.run();
   }
 
   private String generateBlockName() {
@@ -619,29 +612,33 @@ final class IrTranslator {
     return new NodeVariable(name, DataType.BOOLEAN);
   }
 
-  private void convertCode(List<Statement> code) {
-    for (Statement s : code) {
+  private List<NodeOperation> translate(final List<Statement> input) {
+    final List<NodeOperation> output = new ArrayList<>();
+    this.translations.push(output);
+
+    for (final Statement s : input) {
       switch (s.getKind()) {
-        case ASSIGN:
-          convertAssignment((StatementAssignment) s);
-          break;
+      case ASSIGN:
+        convertAssignment((StatementAssignment) s);
+        break;
 
-        case COND:
-          convertCondition((StatementCondition) s);
-          break;
+      case COND:
+        convertCondition((StatementCondition) s);
+        break;
 
-        case CALL:
-          convertCall((StatementAttributeCall) s);
-          break;
+      case CALL:
+        convertCall((StatementAttributeCall) s);
+        break;
 
-        case FUNCALL: // FIXME
-        case FORMAT:
-          break;
+      case FUNCALL: // FIXME
+      case FORMAT:
+        break;
 
-        default:
-          throw new IllegalArgumentException("Unexpected statement: " + s.getKind());
+      default:
+        throw new IllegalArgumentException("Unexpected statement: " + s.getKind());
       }
     }
+    return this.translations.pop();
   }
 
   private static LValue createLValue(Location atom, final String prefix) {
@@ -816,12 +813,6 @@ final class IrTranslator {
     this.prefix = prefix;
     this.extendedPrefix = extended;
     this.code = code;
-  }
-
-  private List<NodeOperation> run() {
-    // TODO
-    // convertCode(code);
-    return Collections.emptyList();
   }
 
   public SsaForm build() {
