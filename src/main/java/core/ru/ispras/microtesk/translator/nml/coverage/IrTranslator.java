@@ -173,11 +173,7 @@ final class IrTranslator {
     return new NodeOperation(op, new NodeVariable(v));
   }
 
-  private static Node createRValue(final LValue lvalue) {
-    return createRValue(lvalue, true);
-  }
-
-  private static Node assignNode(final Node lhs, final Node rhs) {
+  private static NodeOperation assignNode(final Node lhs, final Node rhs) {
     return new NodeOperation(SsaOperation.ASSIGN, rhs, new NodeOperation(SsaOperation.LVALUE, lhs));
   }
 
@@ -213,7 +209,7 @@ final class IrTranslator {
    * Named variables are considered latest in current builder state.
    * Variables are not updated by this method.
    */
-  private static Node createRValue(LValue lvalue, boolean signal) {
+  private static Node createRValue(LValue lvalue, final List<NodeOperation> sidefx) {
     Node root = null;
     if (lvalue.isMacro()) {
       root = macro(SsaOperation.EXPAND, lvalue.base);
@@ -222,17 +218,16 @@ final class IrTranslator {
     }
 
     if (lvalue.isArray()) {
-      if (signal) {
-        final ArrayAccess access = ArrayAccess.load((NodeVariable) root);
-        /* TODO
-        addToContext(assignNode(access.index, lvalue.index));
-        addToContext(assignNode(access.value, Nodes.select(access.array, access.index)));
-        //*/
+      final ArrayAccess access = ArrayAccess.load((NodeVariable) root);
+      final NodeOperation select = Nodes.select(root, lvalue.index);
 
-        root = access.value;
-      } else {
-        root = Nodes.select(root, lvalue.index);
-      }
+
+      sidefx.add(assignNode(access.index, lvalue.index));
+      sidefx.add(assignNode(access.value, select));
+      // TODO
+      // sidefx.add(assignNode(access.value, Nodes.select(access.array, access.index)));
+
+      root = select;
     }
 
     if (lvalue.hasStaticBitfield()) {
@@ -275,7 +270,7 @@ final class IrTranslator {
   private Node[] createRValues(LValue[] lhs) {
     final Node[] arg = new Node[lhs.length];
     for (int i = 0; i < arg.length; ++i) {
-      arg[i] = createRValue(lhs[i]);
+      arg[i] = createRValue(lhs[i], this.translations.peek());
     }
     return arg;
   }
@@ -318,7 +313,7 @@ final class IrTranslator {
       addToContext(Nodes.eq(updateScalar(lvalue), value));
     }
     if (inquirer.isPC(lhs)) {
-      final Node address = createRValue(lvalue.stripBitfield(), false);
+      final Node address = createRValue(lvalue.stripBitfield(), new ArrayList<NodeOperation>());
       signalBranchEvent(address);
     }
   }
@@ -591,7 +586,8 @@ final class IrTranslator {
         if (parameter.getKind() == Primitive.Kind.IMM) {
           final Location atom =
               Location.createPrimitiveBased(arg.getName(), arg.getPrimitive());
-          final Node value = createRValue(createLValue(atom, prefix));
+          final Node value =
+            createRValue(createLValue(atom, prefix), this.translations.peek());
           operands.add(value);
         } else {
           final Node link = new NodeOperation(SsaOperation.ARGUMENT_LINK,
