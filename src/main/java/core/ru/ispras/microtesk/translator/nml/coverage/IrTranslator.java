@@ -718,14 +718,10 @@ final class IrTranslator {
 
       @Override
       public Node apply(Node in) {
-        final Location loc = locationFromNodeVariable(in);
-        if (loc instanceof Location) {
-          final LValue lval = createLValue((Location) loc, prefix);
-          return IntegerCast.cast(createRValue(lval), lval.targetType, getCastType(in));
-        } /* else if (loc instanceof LocationConcat) // LocationConcat is no longer used
-          return CONCAT(createRValues(fetchConcatLValues((LocationConcat) loc))); */
-        else
-          throw new UnsupportedOperationException();
+        final LValue lval = createLValue(locationFromNodeVariable(in), prefix);
+        // TODO
+        // return IntegerCast.cast(createRValue(lval), lval.targetType, getCastType(in));
+        return in;
       }
     };
 
